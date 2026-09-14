@@ -1,0 +1,14 @@
+{
+  "name": "mailtrace-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MAILTRACE AI - AI-Powered Email Threat Detection, GeoLocation & Forensic Intelligence Platform",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:ai": "cd ai-service && (test -d venv || python3 -m venv venv) && . venv/bin/activate && pip install -r requirements.txt -q && uvicorn app.main:app --reload --port 8000",
+    "prisma:generate": "npm run prisma:generate --prefix backend",
+    "prisma:migrate": "npm run prisma:migrate --prefix backend"
+  }
+}

@@ -1,0 +1,21 @@
+From: "Priya Sharma" <priya.sharma@example-org.com>
+To: team-updates@example-org.com
+Reply-To: priya.sharma@example-org.com
+Return-Path: <priya.sharma@example-org.com>
+Subject: Weekly team sync notes - August 28
+Date: Fri, 28 Aug 2026 16:20:00 +0000
+Message-ID: <weekly-notes-0828@example-org.com>
+Authentication-Results: mx.example-org.com; spf=pass smtp.mailfrom=example-org.com; dkim=pass header.d=example-org.com; dmarc=pass (p=reject) header.from=example-org.com
+Received: from mail.example-org.com (10.0.0.15) by mx.example-org.com with ESMTPS id mno345; Fri, 28 Aug 2026 16:19:58 +0000
+Content-Type: text/plain; charset="UTF-8"
+
+Hi team,
+
+Sharing this week's sync notes:
+- Sprint 14 wrapped up on schedule
+- New onboarding docs are live on the wiki
+- Next sync is Monday 10am
+
+Have a great weekend!
+
+Priya

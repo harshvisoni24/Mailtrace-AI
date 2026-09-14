@@ -1,0 +1,23 @@
+From: "Shipping Notification" <noreply@fast-courier-delivery.com>
+To: employee@example-org.com
+Return-Path: <bounce@fast-courier-delivery.com>
+Subject: Delivery failed - invoice attached
+Date: Thu, 27 Aug 2026 11:45:00 +0000
+Message-ID: <ship-2026@fast-courier-delivery.com>
+Authentication-Results: mx.example-org.com; spf=fail; dkim=fail; dmarc=fail (p=reject) header.from=fast-courier-delivery.com
+Received: from 91.198.174.2 by mx.example-org.com with ESMTP id jkl012; Thu, 27 Aug 2026 11:44:55 +0000
+Content-Type: multipart/mixed; boundary="XYZ"
+
+--XYZ
+Content-Type: text/plain; charset="UTF-8"
+
+Your package could not be delivered. Please review the attached invoice for redelivery instructions.
+
+--XYZ
+Content-Type: application/octet-stream; name="invoice_details.js"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="invoice_details.js"
+
+ZnVuY3Rpb24gZGVtbygpe2NvbnNvbGUubG9nKCJzaW11bGF0ZWQgZGVtbyBhdHRhY2htZW50Iik7fQ==
+
+--XYZ--

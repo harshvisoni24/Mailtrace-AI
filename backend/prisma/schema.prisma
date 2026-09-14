@@ -1,0 +1,485 @@
+// MAILTRACE AI - Prisma Schema
+// PostgreSQL is the required database. pgvector extension is used for
+// embeddings but the app degrades gracefully if it is not enabled yet
+// (see Embedding model + docs/PGVECTOR.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// IDENTITY & ACCESS
+// ---------------------------------------------------------------------------
+
+enum RoleName {
+  ADMIN
+  SECURITY_ANALYST
+  INVESTIGATOR
+  VIEWER
+}
+
+model Role {
+  id    String   @id @default(uuid())
+  name  RoleName @unique
+  users User[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  casesAssigned    Case[]            @relation("AssignedAnalyst")
+  auditLogs        AuditLog[]
+  evidenceRecords  Evidence[]        @relation("AcquiredBy")
+  notes            InvestigationNote[]
+
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------
+// CASE MANAGEMENT
+// ---------------------------------------------------------------------------
+
+enum CaseSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CaseStatus {
+  OPEN
+  ACTIVE
+  ON_HOLD
+  CLOSED
+}
+
+model Case {
+  id           String       @id @default(uuid())
+  caseNumber   String       @unique // e.g. CASE-2026-00421
+  title        String
+  severity     CaseSeverity @default(MEDIUM)
+  status       CaseStatus   @default(OPEN)
+  assignedToId String?
+  assignedTo   User?        @relation("AssignedAnalyst", fields: [assignedToId], references: [id])
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  closedAt     DateTime?
+
+  emails      Email[]
+  evidence    Evidence[]
+  reports     ForensicReport[]
+  notes       InvestigationNote[]
+  campaigns   CampaignMember[]     @relation("CaseCampaignLink")
+
+  @@index([status, severity])
+}
+
+model InvestigationNote {
+  id        String   @id @default(uuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// EMAIL + FORENSICS
+// ---------------------------------------------------------------------------
+
+enum ThreatClassification {
+  LEGITIMATE
+  LOW_RISK
+  SUSPICIOUS
+  PHISHING
+  IMPERSONATION
+  BEC
+  MALWARE_DELIVERY
+  FINANCIAL_FRAUD
+  CREDENTIAL_HARVESTING
+  UNKNOWN
+}
+
+enum AuthResult {
+  PASS
+  FAIL
+  NEUTRAL
+  NONE
+  INVALID
+  UNKNOWN
+}
+
+model Email {
+  id             String   @id @default(uuid())
+  caseId         String?
+  case           Case?    @relation(fields: [caseId], references: [id])
+  rawSource      String   // stored raw .eml content (or path reference)
+  storagePath    String?  // path to raw file on disk, if stored externally
+  fromAddress    String
+  fromName       String?
+  toAddresses    String[]
+  ccAddresses    String[]
+  replyTo        String?
+  returnPath     String?
+  subject        String
+  messageId      String?
+  sentDate       DateTime?
+  receivedChain  Json?    // parsed Received header hops, ordered
+  spfResult      AuthResult @default(UNKNOWN)
+  dkimResult     AuthResult @default(UNKNOWN)
+  dmarcResult    AuthResult @default(UNKNOWN)
+  authRawHeader  String?
+
+  threatClassification ThreatClassification @default(UNKNOWN)
+  threatScore           Int?                 // 0-100
+  scoreFactors           Json?               // explainable breakdown
+  aiExplanation          Json?               // { observedFacts, aiInferences, unknowns }
+  attackStory            String?
+
+  isDemoData     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  headers      EmailHeader[]
+  auth         EmailAuthentication?
+  urls         Url[]
+  attachments  Attachment[]
+  iocs         IOC[]
+  evidence     Evidence[]
+  campaignLinks CampaignMember[] @relation("EmailCampaignLink")
+  embeddings   Embedding[]
+
+  @@index([threatClassification])
+  @@index([fromAddress])
+}
+
+model EmailHeader {
+  id      String @id @default(uuid())
+  emailId String
+  email   Email  @relation(fields: [emailId], references: [id])
+  name    String
+  value   String
+
+  @@index([emailId])
+}
+
+model EmailAuthentication {
+  id             String     @id @default(uuid())
+  emailId        String     @unique
+  email          Email      @relation(fields: [emailId], references: [id])
+  spf            AuthResult @default(UNKNOWN)
+  spfDetail      String?
+  dkim           AuthResult @default(UNKNOWN)
+  dkimDetail     String?
+  dmarc          AuthResult @default(UNKNOWN)
+  dmarcDetail    String?
+  alignmentIssue Boolean    @default(false)
+}
+
+// ---------------------------------------------------------------------------
+// NETWORK / INFRASTRUCTURE INTELLIGENCE
+// ---------------------------------------------------------------------------
+
+model IP {
+  id               String   @id @default(uuid())
+  address          String   @unique
+  hostname         String?
+  asn              String?
+  isp              String?
+  country          String?
+  region           String?
+  city             String?
+  latitude         Float?
+  longitude        Float?
+  isVpn            Boolean  @default(false)
+  isTor            Boolean  @default(false)
+  isProxy          Boolean  @default(false)
+  isCloudHosting   Boolean  @default(false)
+  reputationScore  Int?     // 0-100, higher = worse
+  lastEnrichedAt   DateTime?
+  createdAt        DateTime @default(now())
+
+  iocs             IOC[]
+  threatIntel      ThreatIntelligence[]
+}
+
+model Domain {
+  id                String   @id @default(uuid())
+  name              String   @unique
+  registrar         String?
+  registeredAt      DateTime?
+  ageInDays         Int?
+  nameServers       String[]
+  mxRecords         String[]
+  txtRecords        String[]
+  aRecords          String[]
+  hostingProvider   String?
+  reputationScore   Int?
+  lookalikeOf       String?  // reference trusted domain if flagged
+  lookalikeSimilarity Float?
+  lastEnrichedAt    DateTime?
+  createdAt         DateTime @default(now())
+
+  urls              Url[]
+  iocs              IOC[]
+  threatIntel       ThreatIntelligence[]
+}
+
+model Url {
+  id              String   @id @default(uuid())
+  emailId         String
+  email           Email    @relation(fields: [emailId], references: [id])
+  rawUrl          String
+  domainId        String?
+  domain          Domain?  @relation(fields: [domainId], references: [id])
+  finalDestination String?
+  redirectChain   Json?
+  isShortened     Boolean  @default(false)
+  riskScore       Int?
+  createdAt       DateTime @default(now())
+
+  @@index([emailId])
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  emailId    String
+  email      Email    @relation(fields: [emailId], references: [id])
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  sha256     String
+  storagePath String?
+  isSuspicious Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([emailId])
+}
+
+enum IOCType {
+  IP
+  DOMAIN
+  URL
+  HASH
+  EMAIL_ADDRESS
+}
+
+model IOC {
+  id        String   @id @default(uuid())
+  emailId   String?
+  email     Email?   @relation(fields: [emailId], references: [id])
+  type      IOCType
+  value     String
+  ipId      String?
+  ip        IP?      @relation(fields: [ipId], references: [id])
+  domainId  String?
+  domain    Domain?  @relation(fields: [domainId], references: [id])
+  confidence Int?
+  createdAt DateTime @default(now())
+
+  @@index([type, value])
+}
+
+model ThreatIntelligence {
+  id         String   @id @default(uuid())
+  provider   String   // e.g. VIRUSTOTAL, ABUSEIPDB, URLHAUS, DEMO
+  ipId       String?
+  ip         IP?      @relation(fields: [ipId], references: [id])
+  domainId   String?
+  domain     Domain?  @relation(fields: [domainId], references: [id])
+  verdict    String?
+  rawResponse Json?
+  isSimulated Boolean @default(false)
+  fetchedAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// CAMPAIGNS & THREAT GRAPH
+// ---------------------------------------------------------------------------
+
+model Campaign {
+  id               String   @id @default(uuid())
+  name             String
+  confidenceScore  Int?
+  description      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  members  CampaignMember[]
+}
+
+model CampaignMember {
+  id          String    @id @default(uuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id])
+  emailId     String?
+  email       Email?    @relation("EmailCampaignLink", fields: [emailId], references: [id])
+  caseId      String?
+  case        Case?     @relation("CaseCampaignLink", fields: [caseId], references: [id])
+  joinedAt    DateTime  @default(now())
+}
+
+enum RelationshipType {
+  SENT_FROM
+  REPLIED_TO
+  RESOLVES_TO
+  REDIRECTS_TO
+  HOSTED_ON
+  RELATED_TO
+  OBSERVED_IN
+  BELONGS_TO_CAMPAIGN
+}
+
+model ThreatRelationship {
+  id          String           @id @default(uuid())
+  sourceType  String           // e.g. "EMAIL", "IP", "DOMAIN", "URL", "CAMPAIGN"
+  sourceId    String
+  targetType  String
+  targetId    String
+  relationship RelationshipType
+  createdAt   DateTime         @default(now())
+
+  @@index([sourceType, sourceId])
+  @@index([targetType, targetId])
+}
+
+// ---------------------------------------------------------------------------
+// EVIDENCE / CHAIN OF CUSTODY / INTEGRITY LEDGER
+// ---------------------------------------------------------------------------
+
+model Evidence {
+  id              String   @id @default(uuid())
+  caseId          String
+  case            Case     @relation(fields: [caseId], references: [id])
+  emailId         String?
+  email           Email?   @relation(fields: [emailId], references: [id])
+  evidenceType    String   // EMAIL, HEADER, ATTACHMENT, SCREENSHOT, NOTE, OTHER
+  source          String?
+  sha256          String
+  storageReference String?
+  acquiredById    String
+  acquiredBy      User     @relation("AcquiredBy", fields: [acquiredById], references: [id])
+  acquiredAt      DateTime @default(now())
+  integrityStatus String   @default("VERIFIED") // VERIFIED, TAMPERED, UNVERIFIED
+
+  custodyEvents ChainOfCustodyEvent[]
+  ledgerEntries EvidenceLedgerEntry[]
+}
+
+model ChainOfCustodyEvent {
+  id          String   @id @default(uuid())
+  evidenceId  String
+  evidence    Evidence @relation(fields: [evidenceId], references: [id])
+  actorId     String?
+  action      String   // ACQUIRED, HASHED, ASSIGNED, ANALYZED, REPORT_GENERATED, ACCESSED, EXPORTED
+  detail      String?
+  occurredAt  DateTime @default(now())
+}
+
+// Development Evidence Integrity Ledger (NOT a decentralized blockchain).
+// Each entry hashes (evidenceId + timestamp + action + previousHash) to
+// produce a tamper-evident hash chain, extensible to real blockchain later.
+model EvidenceLedgerEntry {
+  id            String   @id @default(uuid())
+  evidenceId    String
+  evidence      Evidence @relation(fields: [evidenceId], references: [id])
+  action        String
+  analystId     String?
+  entryHash     String   // sha256(previousHash + evidenceHash + action + timestamp)
+  previousHash  String?
+  timestamp     DateTime @default(now())
+
+  @@index([evidenceId])
+}
+
+// ---------------------------------------------------------------------------
+// REPORTS, ALERTS, AUDIT
+// ---------------------------------------------------------------------------
+
+model ForensicReport {
+  id         String   @id @default(uuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id])
+  generatedById String
+  content    Json     // structured report sections
+  pdfPath    String?
+  createdAt  DateTime @default(now())
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Alert {
+  id          String        @id @default(uuid())
+  severity    AlertSeverity
+  title       String
+  description String?
+  sourceEmailId String?
+  relatedCaseId String?
+  threatType  String?
+  isRead      Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  status     String   // SUCCESS, FAILURE
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+// ---------------------------------------------------------------------------
+// RAG / KNOWLEDGE BASE
+// ---------------------------------------------------------------------------
+
+model Document {
+  id        String   @id @default(uuid())
+  title     String
+  source    String?
+  content   String
+  createdAt DateTime @default(now())
+
+  embeddings Embedding[]
+}
+
+// NOTE: pgvector's `vector` type is not natively modeled by Prisma.
+// We store embeddings as float arrays here; a raw-SQL migration
+// (see prisma/migrations + docs/PGVECTOR.md) adds a `vector(1536)` column
+// and ivfflat index for actual similarity search. If pgvector is not
+// enabled, the app falls back to skipping semantic search gracefully.
+model Embedding {
+  id         String   @id @default(uuid())
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id])
+  emailId    String?
+  email      Email?   @relation(fields: [emailId], references: [id])
+  content    String
+  vector     Float[]  // shadow column; real pgvector column added via SQL migration
+  createdAt  DateTime @default(now())
+}
