@@ -1,13 +1,7 @@
-"""
-Deterministic rule engine. Produces explainable, reproducible scoring
-BEFORE any AI/Gemini involvement, per the hybrid-architecture requirement:
-Email -> Parser -> Feature Extraction -> Rule Engine -> ML -> RAG -> Gemini -> Risk Engine.
-
-Gemini is layered on top for explanation/narrative only; it must never be
-the sole source of a technical verdict.
-"""
 import re
 from typing import Any, Dict, List, Optional
+
+from app.config.settings import settings
 
 URGENCY_PHRASES = [
     "urgent", "immediately", "action required", "verify your account",
@@ -73,17 +67,43 @@ def score_email(payload: Dict[str, Any]) -> Dict[str, Any]:
     factors["hasAttachments"] = 5 if attachments else 0
 
     raw_total = sum(factors.values())
-    threat_score = max(0, min(raw_total, 100))
+    rule_score = max(0, min(raw_total, 100))
 
-    classification = classify(threat_score, content_signals, auth, lookalike)
+    classification = classify(rule_score, content_signals, auth, lookalike)
 
     return {
-        "threatScore": threat_score,
+        "threatScore": rule_score,
+        "ruleScore": rule_score,
         "scoreFactors": factors,
         "classification": classification,
         "contentSignals": content_signals,
         "relayIps": relay_ips,
     }
+
+
+def blend_ml_score(rule_result: Dict[str, Any], ml_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    result = dict(rule_result)
+    if ml_result is None:
+        result["mlPhishingProbability"] = None
+        result["mlSource"] = None
+        return result
+
+    rule_score = rule_result["ruleScore"]
+    ml_score = ml_result["mlPhishingProbability"]
+    weight = max(0.0, min(settings.ml_blend_weight, 1.0))
+
+    blended = round((1 - weight) * rule_score + weight * ml_score)
+    blended = max(0, min(blended, 100))
+
+    result["threatScore"] = blended
+    result["mlPhishingProbability"] = ml_score
+    result["mlSource"] = ml_result["mlSource"]
+
+    if result["classification"] in ("PHISHING", "SUSPICIOUS", "LOW_RISK", "LEGITIMATE", "UNKNOWN"):
+        result["classification"] = classify(blended, rule_result["contentSignals"], {}, None) \
+            if blended != rule_score else result["classification"]
+
+    return result
 
 
 def classify(score: int, content_signals: Dict[str, Any], auth: Dict[str, Any], lookalike: Optional[Dict[str, Any]]) -> str:
@@ -117,8 +137,3 @@ def build_recommended_actions(classification: str, score: int) -> Dict[str, List
     if classification == "BEC":
         immediate.append("Alert the finance team before any payment or account-detail change is processed.")
         threat_hunting.append("Review recent financial correspondence for related payment-diversion attempts.")
-    if not immediate:
-        immediate.append("No immediate containment action required; continue monitoring.")
-
-    investigation.append("Create or update an investigation case.")
-    return {"immediate": immediate, "investigation": investigation, "threatHunting": threat_hunting}

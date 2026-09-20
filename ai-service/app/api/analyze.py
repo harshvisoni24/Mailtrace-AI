@@ -3,7 +3,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.ml.rule_engine import score_email, build_recommended_actions
+from app.ml.rule_engine import score_email, blend_ml_score, build_recommended_actions
+from app.ml.ml_classifier import score_with_ml
 from app.services.gemini_service import generate_explanation_and_story
 
 router = APIRouter()
@@ -43,20 +44,28 @@ class AnalyzeRequest(BaseModel):
 @router.post("/analyze")
 def analyze_email(request: AnalyzeRequest) -> Dict[str, Any]:
     payload = request.model_dump()
+
     rule_result = score_email(payload)
-    explanation = generate_explanation_and_story(rule_result, payload)
-    recommended_actions = build_recommended_actions(rule_result["classification"], rule_result["threatScore"])
+
+    ml_result = score_with_ml(payload)
+    blended_result = blend_ml_score(rule_result, ml_result)
+
+    explanation = generate_explanation_and_story(blended_result, payload)
+    recommended_actions = build_recommended_actions(blended_result["classification"], blended_result["threatScore"])
 
     return {
-        "classification": rule_result["classification"],
-        "threatScore": rule_result["threatScore"],
-        "scoreFactors": rule_result["scoreFactors"],
+        "classification": blended_result["classification"],
+        "threatScore": blended_result["threatScore"],
+        "ruleScore": blended_result["ruleScore"],
+        "mlPhishingProbability": blended_result["mlPhishingProbability"],
+        "mlSource": blended_result["mlSource"],
+        "scoreFactors": blended_result["scoreFactors"],
         "observedFacts": explanation["observedFacts"],
         "aiInferences": explanation["aiInferences"],
         "unknowns": explanation["unknowns"],
         "attackStory": explanation["attackStory"],
-        "becIndicators": rule_result["contentSignals"]["becIndicators"],
-        "phishingIndicators": rule_result["contentSignals"]["urgencyIndicators"] + rule_result["contentSignals"]["credentialHarvestingIndicators"],
+        "becIndicators": blended_result["contentSignals"]["becIndicators"],
+        "phishingIndicators": blended_result["contentSignals"]["urgencyIndicators"] + blended_result["contentSignals"]["credentialHarvestingIndicators"],
         "recommendedActions": recommended_actions,
         "aiExplanationSource": explanation["aiExplanationSource"],
     }

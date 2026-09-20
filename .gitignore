@@ -26,3 +26,6 @@ backend/storage/uploads/*
 .git/
 
 README-SETUP.md
+
+ai-service/data/
+ai-service/app/ml/artifacts/

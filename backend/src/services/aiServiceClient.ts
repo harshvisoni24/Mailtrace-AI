@@ -6,6 +6,7 @@ const client = axios.create({ baseURL: env.aiServiceUrl, timeout: 20000 });
 export interface AiAnalysisResult {
   classification: string;
   threatScore: number;
+  mlPhishingProbability?: number;
   scoreFactors: Record<string, number>;
   observedFacts: string[];
   aiInferences: { statement: string; confidence: number }[];
@@ -31,7 +32,8 @@ export async function checkAiServiceHealth(): Promise<boolean> {
   try {
     const { data } = await client.get("/health", { timeout: 3000 });
     return data?.status === "ok";
-  } catch {
+  } catch (err) {
+    console.error("AI service health check failed:", err);
     return false;
   }
 }

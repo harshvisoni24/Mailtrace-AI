@@ -101,6 +101,7 @@ async function ingestAndAnalyze(rawSource: string, storagePath: string | null, c
         attachments: parsed.attachments,
       });
     } catch (err) {
+      console.error("AI service call failed:", err);
       aiResult = null;
     }
   }
@@ -113,7 +114,10 @@ async function ingestAndAnalyze(rawSource: string, storagePath: string | null, c
     data: {
       threatClassification: finalClassification as any,
       threatScore: finalScore,
-      scoreFactors: (aiResult?.scoreFactors ?? { headerAnomalies: anomalies.length, lookalikeDomain: lookalike ? 1 : 0 }) as object,
+      scoreFactors: {
+      ...(aiResult?.scoreFactors ?? { headerAnomalies: anomalies.length, lookalikeDomain: lookalike ? 1 : 0 }),
+      ...(aiResult?.mlPhishingProbability !== undefined ? { mlPhishingProbability: aiResult.mlPhishingProbability } : {}),
+      } as object,
       aiExplanation: {
         observedFacts: aiResult?.observedFacts ?? [
           `SPF = ${auth.spf}`,
