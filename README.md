@@ -58,6 +58,32 @@ AI is used strictly for explanation and narration — every technical verdict
 comes from the deterministic rule engine, never from the model alone.
 
 ---
+## ML classifier (MeAJOR + XGBoost)
+
+An optional XGBoost classifier (TF-IDF text features + URL/attachment counts)
+returns a phishing probability (`ai-service/app/ml/ml_classifier.py`). It is
+trained on the public MeAJOR corpus (Mendes, Maia & Praça, 2025).
+
+| Held-out test set (n = 15,739) | Result |
+| ------------------------------ | ------ |
+| Precision                      | 97.97% |
+| Recall                         | 97.98% |
+| F1                             | 97.97% |
+| False-positive rate            | 1.66%  |
+
+Data: 104,933 emails after cleaning and exact-duplicate removal, split
+75% train / 10% validation / 15% test. All test emails come from the TREC
+2005–2007 sources inside MeAJOR, so scores may be optimistic on other mail;
+a cross-source test is planned. Full output: `docs/ml-test-results.txt`.
+
+Reproduce (from `ai-service/`, venv active):
+
+    python scripts/prepare_meajor_dataset.py --input <path-to-MeAJOR-file> --output-dir data/meajor/splits
+    python scripts/train_ml_classifier.py --splits-dir data/meajor/splits --artifacts-dir app/ml/artifacts
+    python scripts/evaluate_test.py
+
+`data/` and `app/ml/artifacts/` are git-ignored. Download MeAJOR from Zenodo
+(doi 10.5281/zenodo.18471483).
 
 ## Status
 

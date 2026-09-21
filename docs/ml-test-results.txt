@@ -1,0 +1,43 @@
+﻿=== DATASET COUNTS ===
+train  rows = 78,701  (phishing 35,112 / legitimate 43,589)
+val    rows = 10,493  (phishing 4,648 / legitimate 5,845)
+test   rows = 15,739  (phishing 7,085 / legitimate 8,654)
+TOTAL rows after cleaning = 104,933
+metadata.json: {"numeric_features": ["url_count", "url_length_max", "url_length_avg", "url_subdom_max", "url_subdom_avg", "attachment_count", "has_attachments"], "test_f1": 0.97974737139228, "train_rows": 78701, "val_rows": 10493, "test_rows": 15739, "source_dataset": "MeAJOR Corpus (Zenodo 10.5281/zenodo.18471483)"}
+
+=== TEST SET RESULTS (label 1 = phishing) ===
+              precision    recall  f1-score   support
+
+      benign     0.9835    0.9834    0.9834      8654
+    phishing     0.9797    0.9798    0.9797      7085
+
+    accuracy                         0.9818     15739
+   macro avg     0.9816    0.9816    0.9816     15739
+weighted avg     0.9818    0.9818    0.9818     15739
+
+TP=6942  FP=144  FN=143  TN=8510
+Precision = 0.9797
+Recall    = 0.9798
+F1        = 0.9797
+False-positive rate = 0.0166  (1.66%)
+
+=== Test results grouped by 'source' (groups with at least 50 emails) ===
+group                      n   phish    prec  recall      F1     FPR
+trec5                   7151    3005   0.971   0.977   0.974   0.021
+trec6                   2174     530   0.933   0.974   0.953   0.023
+trec7                   6414    3550   0.995   0.983   0.989   0.007
+
+=== Test results grouped by 'language' (groups with at least 50 emails) ===
+group                      n   phish    prec  recall      F1     FPR
+de                        52      49   1.000   0.959   0.979   0.000
+en                     11840    3858   0.977   0.970   0.973   0.011
+en;en                   3131    2537   0.978   0.993   0.986   0.094
+es                        55      50   1.000   0.960   0.980   0.000
+ja                        91      91   1.000   1.000   1.000     nan
+ru                       125     124   1.000   0.992   0.996   0.000
+zh                        54      53   1.000   1.000   1.000   0.000
+
+=== SPEED (ML classifier only, 200 emails, one at a time) ===
+median = 2.5 ms   p95 = 3.4 ms
+throughput = 23251 emails/min
+Note: this is the ML step only, not the full pipeline (parsing, IP lookups, threat intel).
